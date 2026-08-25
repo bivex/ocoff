@@ -35,16 +35,15 @@ let parse_data_directories r count =
   let dirs = Array.make 16 (Data_directory.make
     ~kind:Data_directory.Reserved
     ~virtual_address:0l ~size:0l) in
+  let safe_count = max 0 (min count 16) in
   let rec loop i =
-    if i >= min count 16 then Ok ()
+    if i >= safe_count then Ok ()
     else
       let* dir = parse_data_directory r i in
       dirs.(i) <- dir;
       loop (i + 1)
   in
   let* () = loop 0 in
-  let extra = max 0 (count - 16) in
-  let* () = Binary_reader.skip r (extra * 8) in
   Ok dirs
 
 (* ---- Optional Header parsing ---- *)
@@ -151,9 +150,8 @@ let parse_optional_header r size_of_opt_hdr =
       loader_flags;
       number_of_rva_and_sizes;
     } in
-    let* data_directories =
-      parse_data_directories r (Int32.to_int number_of_rva_and_sizes)
-    in
+    let num_dirs = max 0 (min (Int32.to_int number_of_rva_and_sizes) 16) in
+    let* data_directories = parse_data_directories r num_dirs in
     let end_pos = start_pos + size_of_opt_hdr in
     let* () = Binary_reader.seek r end_pos in
     Ok (Some { Optional_header.format; standard; windows; data_directories })
@@ -303,7 +301,7 @@ let parse_symbol r =
   )
 
 let parse_symbol_table r offset count =
-  if Int32.compare offset 0l = 0 || count = 0 then Ok []
+  if Int32.compare offset 0l = 0 || count <= 0 then Ok []
   else
     Binary_reader.at_offset r (Int32.to_int offset) (fun r ->
       let rec loop acc remaining_slots =
@@ -317,9 +315,10 @@ let parse_symbol_table r offset count =
 
 (* ---- String Table parsing ---- *)
 
-let parse_string_table r offset =
-  if Int32.compare offset 0l = 0 then Ok ""
+let parse_string_table r symtab_offset symtab_count =
+  if Int32.compare symtab_offset 0l = 0 || symtab_count <= 0 then Ok ""
   else
+    let offset = Int32.add symtab_offset (Int32.mul (Int32.of_int symtab_count) 18l) in
     Binary_reader.at_offset r (Int32.to_int offset) (fun r ->
       let* size_i32 = Binary_reader.read_u32_le r in
       let size = Int32.to_int size_i32 in
@@ -366,16 +365,17 @@ let parse_pe_file buf =
       let* coff_hdr = parse_coff_header r in
       let* optional_hdr = parse_optional_header r coff_hdr.size_of_optional_header in
       let* sections = parse_section_headers r coff_hdr.number_of_sections in
-      let strtab_offset =
-        Int32.add coff_hdr.pointer_to_symbol_table
-          (Int32.mul coff_hdr.number_of_symbols 18l)
-      in
+      let sym_count = Int32.to_int coff_hdr.number_of_symbols in
       let* symbol_table =
         parse_symbol_table r
           coff_hdr.pointer_to_symbol_table
-          (Int32.to_int coff_hdr.number_of_symbols)
+          sym_count
       in
-      let* string_table = parse_string_table r strtab_offset in
+      let* string_table =
+        parse_string_table r
+          coff_hdr.pointer_to_symbol_table
+          sym_count
+      in
       Ok (Pe_file.make
         ~dos_stub
         ~coff_header:coff_hdr
@@ -392,16 +392,17 @@ let parse_coff_object buf =
   let* coff_hdr = parse_coff_header r in
   let* optional_hdr = parse_optional_header r coff_hdr.size_of_optional_header in
   let* sections = parse_section_headers r coff_hdr.number_of_sections in
-  let strtab_offset =
-    Int32.add coff_hdr.pointer_to_symbol_table
-      (Int32.mul coff_hdr.number_of_symbols 18l)
-  in
+  let sym_count = Int32.to_int coff_hdr.number_of_symbols in
   let* symbol_table =
     parse_symbol_table r
       coff_hdr.pointer_to_symbol_table
-      (Int32.to_int coff_hdr.number_of_symbols)
+      sym_count
   in
-  let* string_table = parse_string_table r strtab_offset in
+  let* string_table =
+    parse_string_table r
+      coff_hdr.pointer_to_symbol_table
+      sym_count
+  in
   Ok (Pe_file.make
     ~dos_stub:None
     ~coff_header:coff_hdr
@@ -442,12 +443,12 @@ let parse_archive_member_header r =
 
 let parse_archive buf =
   let r = Binary_reader.of_bytes buf in
-  let* sig_bytes = Binary_reader.read_bytes r 8 in
-  if Bytes.to_string sig_bytes <> archive_signature then
+  let* sig_bytes = Binary_reader.read_string r 8 in
+  if sig_bytes <> archive_signature then
     Error (Error.Invalid_signature {
       offset = 0;
       expected = Bytes.of_string archive_signature;
-      got = sig_bytes;
+      got = Bytes.of_string sig_bytes;
     })
   else begin
     let members = ref [] in

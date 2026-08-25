@@ -1,6 +1,7 @@
 (** ocoffdump — CLI tool for inspecting PE/COFF binary files. *)
 
 open Cmdliner
+open Ocoff
 
 let dump_cmd =
   let doc = "Dump PE/COFF binary structure to stdout." in
@@ -47,28 +48,21 @@ let dump_cmd =
       end;
       if show_imports then begin
         Printf.printf "\n=== Imports ===\n";
-        (match Ocoff.Pe_file.find_section_by_name pf ".idata" with
-         | None -> Printf.printf "(no .idata section)\n"
-         | Some sec ->
-           let data = Pe_file.section_data pf sec in
-           let idata_rva = sec.Section_header.virtual_address in
-           match Import_resolver.parse_imports ~idata_bytes:data ~idata_rva with
-           | Error e -> Printf.printf "Error parsing imports: %s\n" (Error.to_string e)
-           | Ok entries ->
-             List.iter (Import_resolver.pp_entry Format.std_formatter) entries)
+        match Import_resolver.parse_pe_imports pf with
+        | Error e -> Printf.printf "Error parsing imports: %s\n" (Error.to_string e)
+        | Ok [] -> Printf.printf "(no imports)\n"
+        | Ok entries ->
+          Printf.printf "%d imported DLLs:\n" (List.length entries);
+          List.iter (Import_resolver.pp_entry Format.std_formatter) entries
       end;
       if show_exports then begin
         Printf.printf "\n=== Exports ===\n";
-        (match Ocoff.Pe_file.find_section_by_name pf ".edata" with
-         | None -> Printf.printf "(no .edata section)\n"
-         | Some sec ->
-           let data = Pe_file.section_data pf sec in
-           let edata_rva = sec.Section_header.virtual_address in
-           match Export_resolver.parse_exports data edata_rva with
-           | Error e -> Printf.printf "Error parsing exports: %s\n" (Error.to_string e)
-           | Ok entries ->
-             Printf.printf "%d exports:\n" (List.length entries);
-             List.iter (Export_resolver.pp_entry Format.std_formatter) entries)
+        match Export_resolver.parse_pe_exports pf with
+        | Error e -> Printf.printf "Error parsing exports: %s\n" (Error.to_string e)
+        | Ok [] -> Printf.printf "(no exports)\n"
+        | Ok entries ->
+          Printf.printf "%d exported functions:\n" (List.length entries);
+          List.iter (Export_resolver.pp_entry Format.std_formatter) entries
       end;
       `Ok ()
     | Ok (`Archive arch) ->
@@ -96,19 +90,42 @@ let info_cmd =
       Printf.eprintf "Error: %s\n" (Error.to_string e);
       `Error (false, Error.to_string e)
     | Ok (`Pe pf) ->
-      Printf.printf "Type:     PE image\n";
-      Printf.printf "Machine:  0x%04x\n" pf.Pe_file.coff_header.Coff_header.machine;
+      let mach_str =
+        match Machine_type.of_uint16 pf.Pe_file.coff_header.Coff_header.machine with
+        | Ok m -> Machine_type.to_string m
+        | Error _ -> Printf.sprintf "0x%04x" pf.Pe_file.coff_header.Coff_header.machine
+      in
+      let format_str =
+        match pf.Pe_file.optional_header with
+        | Some oh -> if Optional_header.is_64bit oh then "PE32+ (64-bit)" else "PE32 (32-bit)"
+        | None -> "COFF (no optional header)"
+      in
+      Printf.printf "Format:   PE image (%s)\n" format_str;
+      Printf.printf "Machine:  %s\n" mach_str;
       Printf.printf "Sections: %d\n" (List.length pf.Pe_file.sections);
       Printf.printf "Symbols:  %d\n" (List.length pf.Pe_file.symbol_table);
+      (match pf.Pe_file.optional_header with
+       | Some oh ->
+         Printf.printf "Entry:    0x%08lx\n" oh.Optional_header.standard.address_of_entry_point;
+         Printf.printf "ImageBase: 0x%Lx\n" oh.Optional_header.windows.image_base;
+         Printf.printf "Subsystem: %s\n"
+           (match Subsystem.of_uint16 oh.Optional_header.windows.subsystem with
+            | Ok s -> Subsystem.to_string s | Error _ -> "Unknown")
+       | None -> ());
       `Ok ()
     | Ok (`Coff pf) ->
-      Printf.printf "Type:     COFF object\n";
-      Printf.printf "Machine:  0x%04x\n" pf.Pe_file.coff_header.Coff_header.machine;
+      let mach_str =
+        match Machine_type.of_uint16 pf.Pe_file.coff_header.Coff_header.machine with
+        | Ok m -> Machine_type.to_string m
+        | Error _ -> Printf.sprintf "0x%04x" pf.Pe_file.coff_header.Coff_header.machine
+      in
+      Printf.printf "Format:   COFF object file\n";
+      Printf.printf "Machine:  %s\n" mach_str;
       Printf.printf "Sections: %d\n" (List.length pf.Pe_file.sections);
       Printf.printf "Symbols:  %d\n" (List.length pf.Pe_file.symbol_table);
       `Ok ()
     | Ok (`Archive arch) ->
-      Printf.printf "Type:     COFF archive (library)\n";
+      Printf.printf "Format:   COFF archive (library)\n";
       Printf.printf "Members:  %d\n" (List.length (Archive.members arch));
       Printf.printf "Objects:  %d\n" (List.length (Archive.object_members arch));
       `Ok ()
