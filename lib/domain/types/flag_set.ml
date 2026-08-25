@@ -2,6 +2,20 @@
     Provides reusable decoding, encoding, membership checking, and pretty-printing
     for bitmask flag sets across domain types. *)
 
+let decode_u16 flag_bits n =
+  List.filter_map
+    (fun (flag, bit) -> if n land bit <> 0 then Some flag else None)
+    flag_bits
+
+let encode_u16 flag_bits flags =
+  List.fold_left
+    (fun acc flag ->
+       match List.assoc_opt flag flag_bits with
+       | Some bit -> acc lor bit
+       | None -> acc)
+    0
+    flags
+
 let pp_flags to_str fmt flags =
   match flags with
   | [] -> Format.pp_print_string fmt "(none)"
@@ -18,21 +32,8 @@ end
 module Make (S : FLAG_SPEC) = struct
   type t = S.flag list
 
-  let of_uint16 n =
-    List.filter_map
-      (fun (flag, bit) -> if n land bit <> 0 then Some flag else None)
-      S.flag_bits
-
-  let to_uint16 flags =
-    List.fold_left
-      (fun acc flag ->
-         match List.assoc_opt flag S.flag_bits with
-         | Some bit -> acc lor bit
-         | None -> acc)
-      0
-      flags
-
+  let of_uint16 n = decode_u16 S.flag_bits n
+  let to_uint16 flags = encode_u16 S.flag_bits flags
   let has t flag = List.mem flag t
-
   let pp fmt flags = pp_flags S.flag_to_string fmt flags
 end
