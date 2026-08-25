@@ -3,4 +3,9 @@
  (libraries
    ocoff
    alcotest)
- (modules test_pe_parser))
+ (modules
+   test_binary_adapter
+   test_domain_types
+   test_coff
+   test_pe
+   test_pe_parser))

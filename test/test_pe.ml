@@ -1,0 +1,273 @@
+open Ocoff
+
+let build_sample_pe32plus () =
+  let w = Binary_writer.create () in
+  Binary_writer.write_string w "MZ";
+  Binary_writer.write_zero_pad w 58;
+  Binary_writer.write_u32_le w 64l;
+
+  Binary_writer.write_string w "PE\x00\x00";
+
+  Binary_writer.write_u16_le w 0x8664; (* Machine: AMD64 *)
+  Binary_writer.write_u16_le w 1;      (* NumberOfSections: 1 *)
+  Binary_writer.write_u32_le w 0l;     (* TimeDateStamp *)
+  Binary_writer.write_u32_le w 0l;     (* PointerToSymbolTable *)
+  Binary_writer.write_u32_le w 0l;     (* NumberOfSymbols *)
+  Binary_writer.write_u16_le w 240;    (* SizeOfOptionalHeader = 240 *)
+  Binary_writer.write_u16_le w 0x0022; (* EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE *)
+
+  Binary_writer.write_u16_le w 0x20b;  (* Magic: PE32+ *)
+  Binary_writer.write_u8 w 14;
+  Binary_writer.write_u8 w 0;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u64_le w 0x140000000L;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0x200l;
+  Binary_writer.write_u16_le w 6;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u16_le w 6;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u32_le w 0x3000l;
+  Binary_writer.write_u32_le w 0x400l;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u16_le w 3;      (* Subsystem: Windows CUI *)
+  Binary_writer.write_u16_le w 0x8160;
+  Binary_writer.write_u64_le w 0x100000L;
+  Binary_writer.write_u64_le w 0x1000L;
+  Binary_writer.write_u64_le w 0x100000L;
+  Binary_writer.write_u64_le w 0x1000L;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u32_le w 16l;
+
+  for _ = 1 to 16 do
+    Binary_writer.write_u32_le w 0l;
+    Binary_writer.write_u32_le w 0l;
+  done;
+
+  Binary_writer.write_string w ".text\x00\x00\x00";
+  Binary_writer.write_u32_le w 0x100l;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0x200l;
+  Binary_writer.write_u32_le w 0x400l;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u32_le w 0x60000020l;
+
+  let cur = Binary_writer.pos w in
+  Binary_writer.write_zero_pad w (0x400 - cur);
+
+  Binary_writer.write_string w "\x48\x31\xc0\xc3";
+  Binary_writer.write_zero_pad w (512 - 4);
+  Binary_writer.to_bytes w
+
+let test_pe32plus_parse () =
+  let raw = build_sample_pe32plus () in
+  let res = Pe_parser.parse_pe_file raw in
+  Alcotest.(check bool) "parse pe32+ ok" true (Result.is_ok res);
+  let pf = Result.get_ok res in
+  Alcotest.(check bool) "is image" true (Pe_file.is_image pf);
+  Alcotest.(check bool) "has dos stub" true (pf.dos_stub <> None);
+  let oh = Option.get pf.optional_header in
+  Alcotest.(check bool) "format is Pe32plus" true (oh.format = Optional_header.Pe32plus);
+  Alcotest.(check int64) "image base 0x140000000" 0x140000000L oh.windows.image_base;
+  Alcotest.(check int32) "entry point 0x1000" 0x1000l oh.standard.address_of_entry_point;
+  Alcotest.(check int) "1 section" 1 (List.length pf.sections);
+  let sec = List.hd pf.sections in
+  Alcotest.(check string) ".text section" ".text" (Section_header.name_string sec);
+  let sec_data = Pe_file.section_data pf sec in
+  Alcotest.(check int) "section data size 512" 512 (Bytes.length sec_data)
+
+let test_pe_lookups () =
+  let raw = build_sample_pe32plus () in
+  let pf = Result.get_ok (Pe_parser.parse_pe_file raw) in
+  let found_by_name = Pe_file.find_section_by_name pf ".text" in
+  Alcotest.(check bool) "found .text by name" true (found_by_name <> None);
+  let found_by_rva = Pe_file.find_section_by_rva pf 0x1050 in
+  Alcotest.(check bool) "found section by RVA 0x1050" true (found_by_rva <> None);
+  let not_found_rva = Pe_file.find_section_by_rva pf 0x9000 in
+  Alcotest.(check bool) "RVA 0x9000 not in section" true (not_found_rva = None)
+
+let build_sample_edata () =
+  let w = Binary_writer.create () in
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u32_le w 0l;
+  Binary_writer.write_u16_le w 1;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u32_le w 0x2050l;
+  Binary_writer.write_u32_le w 1l;
+  Binary_writer.write_u32_le w 2l;
+  Binary_writer.write_u32_le w 2l;
+  Binary_writer.write_u32_le w 0x2028l;
+  Binary_writer.write_u32_le w 0x2030l;
+  Binary_writer.write_u32_le w 0x2038l;
+  Binary_writer.write_u32_le w 0x1000l;
+  Binary_writer.write_u32_le w 0x1050l;
+  Binary_writer.write_u32_le w 0x2060l;
+  Binary_writer.write_u32_le w 0x2070l;
+  Binary_writer.write_u16_le w 0;
+  Binary_writer.write_u16_le w 1;
+  let cur = Binary_writer.pos w in
+  Binary_writer.write_zero_pad w (0x50 - cur);
+  Binary_writer.write_string w "test.dll\x00";
+  let cur2 = Binary_writer.pos w in
+  Binary_writer.write_zero_pad w (0x60 - cur2);
+  Binary_writer.write_string w "fn_add\x00";
+  let cur3 = Binary_writer.pos w in
+  Binary_writer.write_zero_pad w (0x70 - cur3);
+  Binary_writer.write_string w "fn_sub\x00";
+  Binary_writer.to_bytes w
+
+let test_export_resolver () =
+  let edata_bytes = build_sample_edata () in
+  let edata_rva = 0x2000l in
+  let res = Export_resolver.parse_exports edata_bytes edata_rva in
+  Alcotest.(check bool) "parse exports ok" true (Result.is_ok res);
+  let entries = Result.get_ok res in
+  Alcotest.(check int) "2 exports" 2 (List.length entries);
+  let exp1 = Export_resolver.find_by_name entries "fn_add" in
+  Alcotest.(check bool) "found fn_add" true (exp1 <> None);
+  let e1 = Option.get exp1 in
+  Alcotest.(check int) "fn_add ordinal is 1" 1 e1.ordinal;
+  Alcotest.(check int32) "fn_add rva is 0x1000" 0x1000l e1.rva;
+  let exp2 = Export_resolver.find_by_ordinal entries 2 in
+  Alcotest.(check bool) "found ordinal 2" true (exp2 <> None);
+  let e2 = Option.get exp2 in
+  Alcotest.(check (option string)) "ordinal 2 is fn_sub" (Some "fn_sub") e2.name;
+  Alcotest.(check int32) "fn_sub rva is 0x1050" 0x1050l e2.rva
+
+let test_checksum_computation () =
+  let raw = Bytes.of_string "MZ\x00\x00\x00\x00\x00\x00" in
+  let csum = Checksum.compute raw ~checksum_offset:4 in
+  Alcotest.(check bool) "checksum is computed" true (Int32.compare csum 0l > 0)
+
+let build_sample_archive () =
+  let w = Binary_writer.create () in
+  Binary_writer.write_string w "!<arch>\n";
+  Binary_writer.write_string w "test.obj/       ";
+  Binary_writer.write_string w "1700000000  ";
+  Binary_writer.write_string w "      ";
+  Binary_writer.write_string w "      ";
+  Binary_writer.write_string w "0       ";
+  let coff_obj = Test_coff.build_sample_coff () in
+  let obj_len = Bytes.length coff_obj in
+  Binary_writer.write_string w (Printf.sprintf "%-10d" obj_len);
+  Binary_writer.write_string w "`\n";
+  Binary_writer.write_bytes w coff_obj;
+  if obj_len mod 2 = 1 then Binary_writer.write_string w "\n";
+  Binary_writer.to_bytes w
+
+let test_archive_parse () =
+  let raw = build_sample_archive () in
+  let res = Pe_parser.parse_archive raw in
+  Alcotest.(check bool) "parse archive ok" true (Result.is_ok res);
+  let arch = Result.get_ok res in
+  Alcotest.(check int) "1 member" 1 (List.length (Archive.members arch));
+  let objs = Archive.object_members arch in
+  Alcotest.(check int) "1 object member" 1 (List.length objs);
+  let (hdr, pf) = List.hd objs in
+  Alcotest.(check string) "member name" "test.obj/" hdr.name;
+  Alcotest.(check int) "object machine" 0x8664 pf.coff_header.machine
+
+let test_invalid_signatures () =
+  let bad_pe = Bytes.of_string "NOT_A_PE_FILE" in
+  Alcotest.(check bool) "bad pe rejected" true (Result.is_error (Pe_parser.parse_pe_file bad_pe));
+  let bad_arch = Bytes.of_string "NOT_AN_ARCHIVE" in
+  Alcotest.(check bool) "bad archive rejected" true (Result.is_error (Pe_parser.parse_archive bad_arch));
+  let empty = Bytes.empty in
+  Alcotest.(check bool) "empty coff rejected" true (Result.is_error (Pe_parser.parse_coff_object empty))
+
+let test_real_guron_exe () =
+  let path = "/Volumes/External/temppp1/source/Guron/Win32/Debug/Guron.exe" in
+  if Sys.file_exists path then begin
+    let res = Ocoff.load_file path in
+    Alcotest.(check bool) "load Guron.exe ok" true (Result.is_ok res);
+    match Result.get_ok res with
+    | `Pe pf ->
+      Alcotest.(check int) "x86 machine" 0x014c pf.coff_header.machine;
+      Alcotest.(check int) "6 sections" 6 (List.length pf.sections);
+      let imports = Result.get_ok (Import_resolver.parse_pe_imports pf) in
+      Alcotest.(check bool) "has imports" true (List.length imports > 0)
+    | _ -> Alcotest.fail "expected PE image"
+  end
+
+let test_real_libeay32_dll () =
+  let path = "/Volumes/External/temppp1/source/Guron/Win32/Debug/libeay32.dll" in
+  if Sys.file_exists path then begin
+    let res = Ocoff.load_file path in
+    Alcotest.(check bool) "load libeay32.dll ok" true (Result.is_ok res);
+    match Result.get_ok res with
+    | `Pe pf ->
+      Alcotest.(check int) "x86 machine" 0x014c pf.coff_header.machine;
+      let exports = Result.get_ok (Export_resolver.parse_pe_exports pf) in
+      Alcotest.(check bool) "has 4000+ exports" true (List.length exports > 4000)
+    | _ -> Alcotest.fail "expected PE DLL"
+  end
+
+let test_csharp_avalonia_dll () =
+  let path = "/Users/password9090/.nuget/packages/avalonia.fonts.inter/12.1.0/lib/net10.0/Avalonia.Fonts.Inter.dll" in
+  if Sys.file_exists path then begin
+    let res = Ocoff.load_file path in
+    Alcotest.(check bool) "load Avalonia .NET 10 DLL ok" true (Result.is_ok res);
+    match Result.get_ok res with
+    | `Pe pf ->
+      let oh = Option.get pf.optional_header in
+      let clr_dir = Optional_header.data_directory oh Data_directory.ClrRuntimeHeader in
+      Alcotest.(check bool) "has CLR runtime header" true (clr_dir <> None && Data_directory.is_present (Option.get clr_dir));
+      let imports = Result.get_ok (Import_resolver.parse_pe_imports pf) in
+      Alcotest.(check int) "1 imported DLL (mscoree.dll)" 1 (List.length imports);
+      let mscoree = List.hd imports in
+      Alcotest.(check string) "mscoree.dll" "mscoree.dll" mscoree.dll_name
+    | _ -> Alcotest.fail "expected PE DLL"
+  end
+
+let test_csharp_extensions_dll () =
+  let path = "/Users/password9090/.nuget/packages/microsoft.extensions.caching.abstractions/10.0.10/lib/net8.0/Microsoft.Extensions.Caching.Abstractions.dll" in
+  if Sys.file_exists path then begin
+    let res = Ocoff.load_file path in
+    Alcotest.(check bool) "load Extensions .NET 8 DLL ok" true (Result.is_ok res);
+    match Result.get_ok res with
+    | `Pe pf ->
+      let oh = Option.get pf.optional_header in
+      let clr_dir = Optional_header.data_directory oh Data_directory.ClrRuntimeHeader in
+      Alcotest.(check bool) "has CLR runtime header" true (clr_dir <> None && Data_directory.is_present (Option.get clr_dir));
+      let imports = Result.get_ok (Import_resolver.parse_pe_imports pf) in
+      Alcotest.(check int) "1 imported DLL (mscoree.dll)" 1 (List.length imports)
+    | _ -> Alcotest.fail "expected PE DLL"
+  end
+
+let pe_image_tests = [
+  Alcotest.test_case "parse_sample_pe32plus" `Quick test_pe32plus_parse;
+  Alcotest.test_case "section_and_rva_lookups" `Quick test_pe_lookups;
+]
+
+let export_tests = [
+  Alcotest.test_case "parse_exports" `Quick test_export_resolver;
+]
+
+let checksum_tests = [
+  Alcotest.test_case "compute_checksum" `Quick test_checksum_computation;
+]
+
+let archive_tests = [
+  Alcotest.test_case "parse_sample_archive" `Quick test_archive_parse;
+]
+
+let error_tests = [
+  Alcotest.test_case "invalid_signatures" `Quick test_invalid_signatures;
+]
+
+let real_binary_tests = [
+  Alcotest.test_case "guron_exe" `Quick test_real_guron_exe;
+  Alcotest.test_case "libeay32_dll" `Quick test_real_libeay32_dll;
+  Alcotest.test_case "csharp_avalonia_dll" `Quick test_csharp_avalonia_dll;
+  Alcotest.test_case "csharp_extensions_dll" `Quick test_csharp_extensions_dll;
+]
