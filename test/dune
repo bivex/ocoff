@@ -8,4 +8,5 @@
    test_domain_types
    test_coff
    test_pe
+   test_real_binaries
    test_pe_parser))

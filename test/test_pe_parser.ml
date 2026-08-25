@@ -10,5 +10,5 @@ let () =
     "checksum_service", Test_pe.checksum_tests;
     "archive_format", Test_pe.archive_tests;
     "error_handling", Test_pe.error_tests;
-    "real_binaries", Test_pe.real_binary_tests;
+    "real_binaries", Test_real_binaries.tests;
   ]
