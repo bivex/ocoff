@@ -43,6 +43,33 @@ let find_section_by_rva t rva =
     rva >= va && rva < va + sz
   ) t.sections
 
+let rva_to_offset t rva =
+  let rva_int = Int32.to_int rva in
+  match find_section_by_rva t rva_int with
+  | None -> None
+  | Some sec ->
+    let sec_va = Int32.to_int sec.Section_header.virtual_address in
+    let sec_raw = Int32.to_int sec.Section_header.pointer_to_raw_data in
+    let offset_in_sec = rva_int - sec_va in
+    let file_off = sec_raw + offset_in_sec in
+    if file_off >= 0 && file_off < Bytes.length t.raw_data then Some file_off
+    else None
+
+let read_cstring_at_offset raw offset =
+  if offset < 0 || offset >= Bytes.length raw then None
+  else
+    let rec find_end idx =
+      if idx >= Bytes.length raw || Bytes.get_uint8 raw idx = 0 then idx
+      else find_end (idx + 1)
+    in
+    let end_off = find_end offset in
+    Some (Bytes.sub_string raw offset (end_off - offset))
+
+let read_cstring_at_rva t rva =
+  match rva_to_offset t rva with
+  | None -> None
+  | Some off -> read_cstring_at_offset t.raw_data off
+
 let section_data t (section : Section_header.t) =
   let offset = Int32.to_int section.pointer_to_raw_data in
   let size = Int32.to_int section.size_of_raw_data in

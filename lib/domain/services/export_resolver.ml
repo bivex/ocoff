@@ -9,28 +9,6 @@ type export_entry = {
 
 let ( let* ) = Result.bind
 
-let rva_to_offset_in_pe (pf : Pe_file.t) (rva : int32) : int option =
-  let rva_int = Int32.to_int rva in
-  match Pe_file.find_section_by_rva pf rva_int with
-  | None -> None
-  | Some sec ->
-    let sec_va = Int32.to_int sec.virtual_address in
-    let sec_raw = Int32.to_int sec.pointer_to_raw_data in
-    let offset_in_sec = rva_int - sec_va in
-    let file_off = sec_raw + offset_in_sec in
-    if file_off >= 0 && file_off < Bytes.length pf.raw_data then Some file_off
-    else None
-
-let read_cstring_at_file_offset (raw : bytes) (offset : int) : string option =
-  if offset < 0 || offset >= Bytes.length raw then None
-  else
-    let end_off = ref offset in
-    let len = Bytes.length raw in
-    while !end_off < len && Bytes.get_uint8 raw !end_off <> 0 do
-      incr end_off
-    done;
-    Some (Bytes.sub_string raw offset (!end_off - offset))
-
 (** Parse exports directly from a PE file using its Data Directories. *)
 let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
   match pf.optional_header with
@@ -40,7 +18,7 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
     | None -> Ok []
     | Some dir when not (Data_directory.is_present dir) -> Ok []
     | Some dir ->
-      match rva_to_offset_in_pe pf dir.virtual_address with
+      match Pe_file.rva_to_offset pf dir.virtual_address with
       | None -> Ok []
       | Some export_dir_file_off ->
         let r = Binary_reader.of_bytes pf.raw_data in
@@ -60,7 +38,7 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
         let n_exports = max 0 (min (Int32.to_int addr_table_entries) 65536) in
         let export_rvas = Array.make n_exports 0l in
         let* () =
-          match rva_to_offset_in_pe pf eat_rva with
+          match Pe_file.rva_to_offset pf eat_rva with
           | None -> Ok ()
           | Some eat_off ->
             let rec loop i =
@@ -76,7 +54,7 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
         let n_names = max 0 (min (Int32.to_int num_name_ptrs) n_exports) in
         let name_rvas = Array.make n_names 0l in
         let* () =
-          match rva_to_offset_in_pe pf name_ptr_rva with
+          match Pe_file.rva_to_offset pf name_ptr_rva with
           | None -> Ok ()
           | Some name_ptr_off ->
             let rec loop i =
@@ -91,7 +69,7 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
 
         let ordinal_indexes = Array.make n_names 0 in
         let* () =
-          match rva_to_offset_in_pe pf ordinal_table_rva with
+          match Pe_file.rva_to_offset pf ordinal_table_rva with
           | None -> Ok ()
           | Some ord_off ->
             let rec loop i =
@@ -104,16 +82,10 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
             loop 0
         in
 
-        let read_name name_rva =
-          match rva_to_offset_in_pe pf name_rva with
-          | None -> None
-          | Some off -> read_cstring_at_file_offset pf.raw_data off
-        in
-
         let name_by_eat_index = Hashtbl.create n_names in
         for i = 0 to n_names - 1 do
           let eat_idx = ordinal_indexes.(i) in
-          (match read_name name_rvas.(i) with
+          (match Pe_file.read_cstring_at_rva pf name_rvas.(i) with
           | Some name -> Hashtbl.replace name_by_eat_index eat_idx name
           | None -> ())
         done;
@@ -130,7 +102,7 @@ let parse_pe_exports (pf : Pe_file.t) : (export_entry list, Error.t) result =
           let name = Hashtbl.find_opt name_by_eat_index i in
           let biased_ordinal = i + Int32.to_int ordinal_base in
           let forwarder =
-            if is_forwarder rva then read_name rva
+            if is_forwarder rva then Pe_file.read_cstring_at_rva pf rva
             else None
           in
           let actual_rva = if forwarder <> None then 0l else rva in
@@ -205,26 +177,15 @@ let parse_exports (edata_bytes : bytes) (edata_rva : int32) : (export_entry list
       loop 0
   in
 
-  let read_name name_rva =
-    match rva_to_offset name_rva with
-    | Error _ -> None
-    | Ok off ->
-      let max_len = Bytes.length edata_bytes - off in
-      if max_len <= 0 then None
-      else
-        let end_off = ref off in
-        while !end_off < Bytes.length edata_bytes && Bytes.get_uint8 edata_bytes !end_off <> 0 do
-          incr end_off
-        done;
-        Some (Bytes.sub_string edata_bytes off (!end_off - off))
-  in
-
   let name_by_eat_index = Hashtbl.create n_names in
   for i = 0 to n_names - 1 do
     let eat_idx = ordinal_indexes.(i) in
-    (match read_name name_rvas.(i) with
-    | Some name -> Hashtbl.replace name_by_eat_index eat_idx name
-    | None -> ())
+    (match rva_to_offset name_rvas.(i) with
+    | Error _ -> ()
+    | Ok off ->
+      match Pe_file.read_cstring_at_offset edata_bytes off with
+      | Some name -> Hashtbl.replace name_by_eat_index eat_idx name
+      | None -> ())
   done;
 
   let edata_start = Int32.to_int edata_rva in
@@ -239,7 +200,10 @@ let parse_exports (edata_bytes : bytes) (edata_rva : int32) : (export_entry list
     let name = Hashtbl.find_opt name_by_eat_index i in
     let biased_ordinal = i + Int32.to_int ordinal_base in
     let forwarder =
-      if is_forwarder rva then read_name rva
+      if is_forwarder rva then
+        match rva_to_offset rva with
+        | Error _ -> None
+        | Ok off -> Pe_file.read_cstring_at_offset edata_bytes off
       else None
     in
     let actual_rva = if forwarder <> None then 0l else rva in
