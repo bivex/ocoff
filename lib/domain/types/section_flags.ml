@@ -214,9 +214,4 @@ let flag_to_string = function
 
 (** [pp fmt flags] pretty-prints the flag list [flags] to formatter [fmt]
     as a pipe-separated list of flag names. *)
-let pp fmt flags =
-  match flags with
-  | [] -> Format.pp_print_string fmt "(none)"
-  | _ ->
-    let strs = List.map flag_to_string flags in
-    Format.pp_print_string fmt (String.concat " | " strs)
+let pp fmt flags = Flag_set.pp_flags flag_to_string fmt flags
