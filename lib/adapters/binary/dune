@@ -1,0 +1,5 @@
+(library
+ (name ocoff_adapters_binary)
+ (public_name ocoff.adapters_binary)
+ (libraries ocoff.domain_types ocoff.domain_model ocoff.ports)
+ (wrapped false))

@@ -1,0 +1,5 @@
+(library
+ (name ocoff_domain_services)
+ (public_name ocoff.domain_services)
+ (libraries ocoff.domain_types ocoff.domain_model ocoff.adapters_binary)
+ (wrapped false))

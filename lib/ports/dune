@@ -1,0 +1,5 @@
+(library
+ (name ocoff_ports)
+ (public_name ocoff.ports)
+ (libraries ocoff.domain_types ocoff.domain_model)
+ (wrapped false))

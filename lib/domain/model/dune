@@ -1,0 +1,5 @@
+(library
+ (name ocoff_domain_model)
+ (public_name ocoff.domain_model)
+ (libraries ocoff.domain_types)
+ (wrapped false))
