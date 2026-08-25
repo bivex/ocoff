@@ -53,10 +53,9 @@ let read_i16_le t =
   match bounds_check t 2 with
   | Error e -> Error e
   | Ok () ->
-    let v = Bytes.get_uint16_le t.buf t.pos in
+    let v = Bytes.get_int16_le t.buf t.pos in
     t.pos <- t.pos + 2;
-    let signed = if v land 0x8000 <> 0 then v lor (lnot 0xffff) else v in
-    Ok signed
+    Ok v
 
 let read_u32_le t =
   match bounds_check t 4 with
@@ -80,12 +79,8 @@ let read_u32_be t =
   match bounds_check t 4 with
   | Error e -> Error e
   | Ok () ->
-    let b0 = Bytes.get_uint8 t.buf t.pos in
-    let b1 = Bytes.get_uint8 t.buf (t.pos+1) in
-    let b2 = Bytes.get_uint8 t.buf (t.pos+2) in
-    let b3 = Bytes.get_uint8 t.buf (t.pos+3) in
+    let v = Bytes.get_int32_be t.buf t.pos in
     t.pos <- t.pos + 4;
-    let v = Int32.of_int ((b0 lsl 24) lor (b1 lsl 16) lor (b2 lsl 8) lor b3) in
     Ok v
 
 let read_bytes t n =
@@ -104,17 +99,17 @@ let read_string t n =
 let read_cstring t ?(max_len = 4096) () =
   let start = t.pos in
   let limit = min (Bytes.length t.buf) (start + max_len) in
-  let pos = ref start in
-  while !pos < limit && Bytes.get_uint8 t.buf !pos <> 0 do
-    incr pos
-  done;
-  if !pos >= limit then
-    Error (Error.String_not_terminated { offset = start })
-  else begin
-    let s = Bytes.sub_string t.buf start (!pos - start) in
-    t.pos <- !pos + 1;
+  let rec find_null p =
+    if p >= limit then Error (Error.String_not_terminated { offset = start })
+    else if Bytes.get_uint8 t.buf p = 0 then Ok p
+    else find_null (p + 1)
+  in
+  match find_null start with
+  | Error e -> Error e
+  | Ok null_pos ->
+    let s = Bytes.sub_string t.buf start (null_pos - start) in
+    t.pos <- null_pos + 1;
     Ok s
-  end
 
 let peek_bytes t n =
   match bounds_check t n with
