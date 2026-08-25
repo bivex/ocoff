@@ -7,6 +7,10 @@
    test_binary_adapter
    test_domain_types
    test_coff
-   test_pe
+   test_pe_image
+   test_export_resolver
+   test_checksum
+   test_archive
+   test_error_handling
    test_real_binaries
    test_pe_parser))
