@@ -57,25 +57,29 @@ let parse_aux_clr_token r =
   let* _ = Binary_reader.read_bytes r 12 in
   Ok (Coff_symbol.ClrToken { aux_type; symbol_table_index })
 
+let is_bf_ef name_str = name_str = ".bf" || name_str = ".ef"
+
+let dispatch_aux_record r storage_class name_str =
+  match storage_class with
+  | 2 -> parse_aux_function_def r
+  | 101 when is_bf_ef name_str -> parse_aux_bf_ef r
+  | 105 -> parse_aux_weak_external r
+  | 103 -> parse_aux_file r
+  | 3 -> parse_aux_section_def r
+  | 107 -> parse_aux_clr_token r
+  | _ ->
+    let* raw = Binary_reader.read_bytes r 18 in
+    Ok (Coff_symbol.Raw raw)
+
+let pad_aux_record r start =
+  let consumed = Binary_reader.pos r - start in
+  if consumed < 18 then
+    ignore (Binary_reader.skip r (18 - consumed))
+
 let parse_aux_record r storage_class name_str =
   let start = Binary_reader.pos r in
-  let result = match storage_class with
-    | 2 -> parse_aux_function_def r
-    | 101 when name_str = ".bf" || name_str = ".ef" ->
-      parse_aux_bf_ef r
-    | 105 -> parse_aux_weak_external r
-    | 103 -> parse_aux_file r
-    | 3 -> parse_aux_section_def r
-    | 107 -> parse_aux_clr_token r
-    | _ ->
-      let* raw = Binary_reader.read_bytes r 18 in
-      Ok (Coff_symbol.Raw raw)
-  in
-  let consumed = Binary_reader.pos r - start in
-  if consumed < 18 then begin
-    match Binary_reader.skip r (18 - consumed) with
-    | _ -> ()
-  end;
+  let result = dispatch_aux_record r storage_class name_str in
+  pad_aux_record r start;
   result
 
 let parse_symbol r =
