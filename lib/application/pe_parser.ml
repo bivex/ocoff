@@ -48,114 +48,100 @@ let parse_data_directories r count =
 
 (* ---- Optional Header parsing ---- *)
 
+let format_of_magic = function
+  | 0x20b -> Optional_header.Pe32plus
+  | _ -> Optional_header.Pe32
+
+let read_standard_fields r format magic =
+  let* major_linker_version = Binary_reader.read_u8 r in
+  let* minor_linker_version = Binary_reader.read_u8 r in
+  let* size_of_code = Binary_reader.read_u32_le r in
+  let* size_of_initialized_data = Binary_reader.read_u32_le r in
+  let* size_of_uninitialized_data = Binary_reader.read_u32_le r in
+  let* address_of_entry_point = Binary_reader.read_u32_le r in
+  let* base_of_code = Binary_reader.read_u32_le r in
+  let* base_of_data =
+    if format = Optional_header.Pe32 then
+      let* v = Binary_reader.read_u32_le r in Ok (Some v)
+    else Ok None
+  in
+  Ok {
+    Optional_header.magic;
+    major_linker_version;
+    minor_linker_version;
+    size_of_code;
+    size_of_initialized_data;
+    size_of_uninitialized_data;
+    address_of_entry_point;
+    base_of_code;
+    base_of_data;
+  }
+
+let read_pointer_uint r format =
+  if format = Optional_header.Pe32 then
+    let* v = Binary_reader.read_u32_le r in
+    Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
+  else Binary_reader.read_u64_le r
+
+let read_windows_fields r format =
+  let* image_base = read_pointer_uint r format in
+  let* section_alignment = Binary_reader.read_u32_le r in
+  let* file_alignment = Binary_reader.read_u32_le r in
+  let* major_os_version = Binary_reader.read_u16_le r in
+  let* minor_os_version = Binary_reader.read_u16_le r in
+  let* major_image_version = Binary_reader.read_u16_le r in
+  let* minor_image_version = Binary_reader.read_u16_le r in
+  let* major_subsystem_version = Binary_reader.read_u16_le r in
+  let* minor_subsystem_version = Binary_reader.read_u16_le r in
+  let* win32_version_value = Binary_reader.read_u32_le r in
+  let* size_of_image = Binary_reader.read_u32_le r in
+  let* size_of_headers = Binary_reader.read_u32_le r in
+  let* checksum = Binary_reader.read_u32_le r in
+  let* subsystem = Binary_reader.read_u16_le r in
+  let* dll_characteristics = Binary_reader.read_u16_le r in
+  let* size_of_stack_reserve = read_pointer_uint r format in
+  let* size_of_stack_commit = read_pointer_uint r format in
+  let* size_of_heap_reserve = read_pointer_uint r format in
+  let* size_of_heap_commit = read_pointer_uint r format in
+  let* loader_flags = Binary_reader.read_u32_le r in
+  let* number_of_rva_and_sizes = Binary_reader.read_u32_le r in
+  Ok {
+    Optional_header.image_base;
+    section_alignment;
+    file_alignment;
+    major_os_version;
+    minor_os_version;
+    major_image_version;
+    minor_image_version;
+    major_subsystem_version;
+    minor_subsystem_version;
+    win32_version_value;
+    size_of_image;
+    size_of_headers;
+    checksum;
+    subsystem;
+    dll_characteristics;
+    size_of_stack_reserve;
+    size_of_stack_commit;
+    size_of_heap_reserve;
+    size_of_heap_commit;
+    loader_flags;
+    number_of_rva_and_sizes;
+  }
+
 let parse_optional_header r size_of_opt_hdr =
   if size_of_opt_hdr = 0 then Ok None
-  else begin
+  else
     let start_pos = Binary_reader.pos r in
     let* magic = Binary_reader.read_u16_le r in
-    let format = match magic with
-      | 0x10b -> Optional_header.Pe32
-      | 0x20b -> Optional_header.Pe32plus
-      | _ -> Optional_header.Pe32
-    in
-    let* major_linker_version = Binary_reader.read_u8 r in
-    let* minor_linker_version = Binary_reader.read_u8 r in
-    let* size_of_code = Binary_reader.read_u32_le r in
-    let* size_of_initialized_data = Binary_reader.read_u32_le r in
-    let* size_of_uninitialized_data = Binary_reader.read_u32_le r in
-    let* address_of_entry_point = Binary_reader.read_u32_le r in
-    let* base_of_code = Binary_reader.read_u32_le r in
-    let* base_of_data =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in Ok (Some v)
-      else Ok None
-    in
-    let standard = {
-      Optional_header.magic;
-      major_linker_version;
-      minor_linker_version;
-      size_of_code;
-      size_of_initialized_data;
-      size_of_uninitialized_data;
-      address_of_entry_point;
-      base_of_code;
-      base_of_data;
-    } in
-    let* image_base =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in
-        Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
-      else Binary_reader.read_u64_le r
-    in
-    let* section_alignment = Binary_reader.read_u32_le r in
-    let* file_alignment = Binary_reader.read_u32_le r in
-    let* major_os_version = Binary_reader.read_u16_le r in
-    let* minor_os_version = Binary_reader.read_u16_le r in
-    let* major_image_version = Binary_reader.read_u16_le r in
-    let* minor_image_version = Binary_reader.read_u16_le r in
-    let* major_subsystem_version = Binary_reader.read_u16_le r in
-    let* minor_subsystem_version = Binary_reader.read_u16_le r in
-    let* win32_version_value = Binary_reader.read_u32_le r in
-    let* size_of_image = Binary_reader.read_u32_le r in
-    let* size_of_headers = Binary_reader.read_u32_le r in
-    let* checksum = Binary_reader.read_u32_le r in
-    let* subsystem = Binary_reader.read_u16_le r in
-    let* dll_characteristics = Binary_reader.read_u16_le r in
-    let* size_of_stack_reserve =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in
-        Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
-      else Binary_reader.read_u64_le r
-    in
-    let* size_of_stack_commit =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in
-        Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
-      else Binary_reader.read_u64_le r
-    in
-    let* size_of_heap_reserve =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in
-        Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
-      else Binary_reader.read_u64_le r
-    in
-    let* size_of_heap_commit =
-      if format = Optional_header.Pe32 then
-        let* v = Binary_reader.read_u32_le r in
-        Ok (Int64.logand (Int64.of_int32 v) 0xFFFFFFFFL)
-      else Binary_reader.read_u64_le r
-    in
-    let* loader_flags = Binary_reader.read_u32_le r in
-    let* number_of_rva_and_sizes = Binary_reader.read_u32_le r in
-    let windows = {
-      Optional_header.image_base;
-      section_alignment;
-      file_alignment;
-      major_os_version;
-      minor_os_version;
-      major_image_version;
-      minor_image_version;
-      major_subsystem_version;
-      minor_subsystem_version;
-      win32_version_value;
-      size_of_image;
-      size_of_headers;
-      checksum;
-      subsystem;
-      dll_characteristics;
-      size_of_stack_reserve;
-      size_of_stack_commit;
-      size_of_heap_reserve;
-      size_of_heap_commit;
-      loader_flags;
-      number_of_rva_and_sizes;
-    } in
-    let num_dirs = max 0 (min (Int32.to_int number_of_rva_and_sizes) 16) in
+    let format = format_of_magic magic in
+    let* standard = read_standard_fields r format magic in
+    let* windows = read_windows_fields r format in
+    let num_dirs = max 0 (min (Int32.to_int windows.number_of_rva_and_sizes) 16) in
     let* data_directories = parse_data_directories r num_dirs in
     let end_pos = start_pos + size_of_opt_hdr in
     let* () = Binary_reader.seek r end_pos in
     Ok (Some { Optional_header.format; standard; windows; data_directories })
-  end
 
 (* ---- Section Header parsing ---- *)
 
@@ -196,8 +182,7 @@ let parse_section_headers r count =
 
 let pe_signature = "PE\x00\x00"
 
-let parse_pe_file buf =
-  let r = Binary_reader.of_bytes buf in
+let read_dos_stub buf r =
   let* mz = Binary_reader.read_bytes r 2 in
   if Bytes.get_uint8 mz 0 <> 0x4d || Bytes.get_uint8 mz 1 <> 0x5a then
     Error (Error.Invalid_signature {
@@ -205,54 +190,29 @@ let parse_pe_file buf =
       expected = Bytes.of_string "MZ";
       got = mz;
     })
-  else begin
+  else
     let* () = Binary_reader.seek r 0x3c in
     let* pe_offset_i32 = Binary_reader.read_u32_le r in
     let pe_offset = Int32.to_int pe_offset_i32 in
     let dos_stub_bytes =
-      match Binary_reader.at_offset r 0 (fun r ->
-        Binary_reader.read_bytes r pe_offset
-      ) with
+      match Binary_reader.at_offset r 0 (fun r -> Binary_reader.read_bytes r pe_offset) with
       | Ok b -> b
       | Error _ -> Bytes.sub buf 0 (min pe_offset (Bytes.length buf))
     in
-    let dos_stub = Some (Dos_stub.make dos_stub_bytes pe_offset) in
-    let* () = Binary_reader.seek r pe_offset in
-    let* sig_bytes = Binary_reader.read_bytes r 4 in
-    if Bytes.to_string sig_bytes <> pe_signature then
-      Error (Error.Invalid_signature {
-        offset = pe_offset;
-        expected = Bytes.of_string pe_signature;
-        got = sig_bytes;
-      })
-    else begin
-      let* coff_hdr = parse_coff_header r in
-      let* optional_hdr = parse_optional_header r coff_hdr.size_of_optional_header in
-      let* sections = parse_section_headers r coff_hdr.number_of_sections in
-      let sym_count = Int32.to_int coff_hdr.number_of_symbols in
-      let* symbol_table =
-        Pe_symbol_parser.parse_symbol_table r
-          coff_hdr.pointer_to_symbol_table
-          sym_count
-      in
-      let* string_table =
-        Pe_symbol_parser.parse_string_table r
-          coff_hdr.pointer_to_symbol_table
-          sym_count
-      in
-      Ok (Pe_file.make
-        ~dos_stub
-        ~coff_header:coff_hdr
-        ~optional_header:optional_hdr
-        ~sections
-        ~symbol_table
-        ~string_table
-        ~raw_data:buf)
-    end
-  end
+    Ok (Dos_stub.make dos_stub_bytes pe_offset)
 
-let parse_coff_object buf =
-  let r = Binary_reader.of_bytes buf in
+let verify_pe_signature r pe_offset =
+  let* () = Binary_reader.seek r pe_offset in
+  let* sig_bytes = Binary_reader.read_bytes r 4 in
+  if Bytes.to_string sig_bytes <> pe_signature then
+    Error (Error.Invalid_signature {
+      offset = pe_offset;
+      expected = Bytes.of_string pe_signature;
+      got = sig_bytes;
+    })
+  else Ok ()
+
+let parse_pe_payload r dos_stub buf =
   let* coff_hdr = parse_coff_header r in
   let* optional_hdr = parse_optional_header r coff_hdr.size_of_optional_header in
   let* sections = parse_section_headers r coff_hdr.number_of_sections in
@@ -268,13 +228,23 @@ let parse_coff_object buf =
       sym_count
   in
   Ok (Pe_file.make
-    ~dos_stub:None
+    ~dos_stub
     ~coff_header:coff_hdr
     ~optional_header:optional_hdr
     ~sections
     ~symbol_table
     ~string_table
     ~raw_data:buf)
+
+let parse_pe_file buf =
+  let r = Binary_reader.of_bytes buf in
+  let* stub = read_dos_stub buf r in
+  let* () = verify_pe_signature r (Dos_stub.pe_offset stub) in
+  parse_pe_payload r (Some stub) buf
+
+let parse_coff_object buf =
+  let r = Binary_reader.of_bytes buf in
+  parse_pe_payload r None buf
 
 (* ---- Archive parsing ---- *)
 
