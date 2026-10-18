@@ -1,3 +1,5 @@
+let byte_mask = 0xff
+
 (** Concrete binary writer backed by Buffer.t. *)
 
 type t = { buf: Buffer.t }
@@ -9,20 +11,20 @@ let pos t = Buffer.length t.buf
 let to_bytes t = Buffer.to_bytes t.buf
 
 let write_u8 t v =
-  Buffer.add_uint8 t.buf (v land 0xff)
+  Buffer.add_uint8 t.buf (v land byte_mask)
 
 let write_u16_le t v =
-  Buffer.add_uint8 t.buf (v land 0xff);
-  Buffer.add_uint8 t.buf ((v lsr 8) land 0xff)
+  Buffer.add_uint8 t.buf (v land byte_mask);
+  Buffer.add_uint8 t.buf ((v lsr 8) land byte_mask)
 
 let write_i16_le t v = write_u16_le t (v land 0xffff)
 
 let write_u32_le t v =
   let v = Int32.to_int v in
-  Buffer.add_uint8 t.buf (v land 0xff);
-  Buffer.add_uint8 t.buf ((v lsr 8) land 0xff);
-  Buffer.add_uint8 t.buf ((v lsr 16) land 0xff);
-  Buffer.add_uint8 t.buf ((v lsr 24) land 0xff)
+  Buffer.add_uint8 t.buf (v land byte_mask);
+  Buffer.add_uint8 t.buf ((v lsr 8) land byte_mask);
+  Buffer.add_uint8 t.buf ((v lsr 16) land byte_mask);
+  Buffer.add_uint8 t.buf ((v lsr 24) land byte_mask)
 
 let write_i32_le t v = write_u32_le t v
 

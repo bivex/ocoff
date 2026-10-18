@@ -38,10 +38,10 @@ let test_subsystems () =
 let test_section_flags () =
   let raw = 0x60000020l in
   let flags = Section_flags.of_uint32 raw in
-  Alcotest.(check bool) "has CntCode" true (Section_flags.has flags Section_flags.CntCode);
-  Alcotest.(check bool) "has MemExecute" true (Section_flags.has flags Section_flags.MemExecute);
-  Alcotest.(check bool) "has MemRead" true (Section_flags.has flags Section_flags.MemRead);
-  Alcotest.(check bool) "not MemWrite" false (Section_flags.has flags Section_flags.MemWrite);
+  Alcotest.(check bool) "has CntCode" true (Section_flags.has flags ~flag:Section_flags.CntCode);
+  Alcotest.(check bool) "has MemExecute" true (Section_flags.has flags ~flag:Section_flags.MemExecute);
+  Alcotest.(check bool) "has MemRead" true (Section_flags.has flags ~flag:Section_flags.MemRead);
+  Alcotest.(check bool) "not MemWrite" false (Section_flags.has flags ~flag:Section_flags.MemWrite);
   Alcotest.(check int32) "roundtrip uint32" raw (Section_flags.to_uint32 flags)
 
 let tests = [

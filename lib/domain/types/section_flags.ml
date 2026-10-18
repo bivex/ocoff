@@ -150,7 +150,7 @@ let to_uint32 flags =
     flags
 
 (** [has flags flag] is [true] iff [flag] is present in [flags]. *)
-let has flags flag = List.mem flag flags
+let has flags ~flag = List.mem flag flags
 
 (** [alignment_of flags] extracts the alignment in bytes encoded by the
     [ALIGN_*] flag present in [flags], or [None] if no alignment flag is

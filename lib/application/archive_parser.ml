@@ -90,7 +90,7 @@ let parse_archive ~parse_coff_object buf =
           in
           let consumed = Binary_reader.pos r - member_start in
           if consumed mod 2 = 1 then
-            (match Binary_reader.skip r 1 with _ -> ());
+            ignore (Binary_reader.skip r 1);
           let content = match hdr.Archive.name with
             | "/" -> parse_linker_member1 data
             | "//" -> parse_longnames data
