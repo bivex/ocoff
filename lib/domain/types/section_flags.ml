@@ -155,26 +155,68 @@ let has flags ~flag = List.mem flag flags
 (** [alignment_of flags] extracts the alignment in bytes encoded by the
     [ALIGN_*] flag present in [flags], or [None] if no alignment flag is
     set. *)
+let align_bytes_hi = function
+  | Align128Bytes  -> Some 128
+  | Align256Bytes  -> Some 256
+  | Align512Bytes  -> Some 512
+  | Align1024Bytes -> Some 1024
+  | Align2048Bytes -> Some 2048
+  | Align4096Bytes -> Some 4096
+  | Align8192Bytes -> Some 8192
+  | _              -> None
+
+let align_bytes = function
+  | Align1Bytes    -> Some 1
+  | Align2Bytes    -> Some 2
+  | Align4Bytes    -> Some 4
+  | Align8Bytes    -> Some 8
+  | Align16Bytes   -> Some 16
+  | Align32Bytes   -> Some 32
+  | Align64Bytes   -> Some 64
+  | other          -> align_bytes_hi other
+
 let alignment_of flags =
-  (* Map each align flag to its byte count. *)
-  let align_bytes = function
-    | Align1Bytes    -> Some 1
-    | Align2Bytes    -> Some 2
-    | Align4Bytes    -> Some 4
-    | Align8Bytes    -> Some 8
-    | Align16Bytes   -> Some 16
-    | Align32Bytes   -> Some 32
-    | Align64Bytes   -> Some 64
-    | Align128Bytes  -> Some 128
-    | Align256Bytes  -> Some 256
-    | Align512Bytes  -> Some 512
-    | Align1024Bytes -> Some 1024
-    | Align2048Bytes -> Some 2048
-    | Align4096Bytes -> Some 4096
-    | Align8192Bytes -> Some 8192
-    | _ -> None
-  in
   List.find_map align_bytes flags
+
+let flag_to_string_align_hi = function
+  | Align128Bytes        -> "ALIGN_128BYTES"
+  | Align256Bytes        -> "ALIGN_256BYTES"
+  | Align512Bytes        -> "ALIGN_512BYTES"
+  | Align1024Bytes       -> "ALIGN_1024BYTES"
+  | Align2048Bytes       -> "ALIGN_2048BYTES"
+  | Align4096Bytes       -> "ALIGN_4096BYTES"
+  | Align8192Bytes       -> "ALIGN_8192BYTES"
+  | _                    -> "UNKNOWN"
+
+let flag_to_string_align = function
+  | Align1Bytes          -> "ALIGN_1BYTES"
+  | Align2Bytes          -> "ALIGN_2BYTES"
+  | Align4Bytes          -> "ALIGN_4BYTES"
+  | Align8Bytes          -> "ALIGN_8BYTES"
+  | Align16Bytes         -> "ALIGN_16BYTES"
+  | Align32Bytes         -> "ALIGN_32BYTES"
+  | Align64Bytes         -> "ALIGN_64BYTES"
+  | other                -> flag_to_string_align_hi other
+
+let flag_to_string_mem = function
+  | LnkNrelocOvfl        -> "LNK_NRELOC_OVFL"
+  | MemDiscardable       -> "MEM_DISCARDABLE"
+  | MemNotCached         -> "MEM_NOT_CACHED"
+  | MemNotPaged          -> "MEM_NOT_PAGED"
+  | MemShared            -> "MEM_SHARED"
+  | MemExecute           -> "MEM_EXECUTE"
+  | MemRead              -> "MEM_READ"
+  | MemWrite             -> "MEM_WRITE"
+  | other                -> flag_to_string_align other
+
+let flag_to_string_cnt = function
+  | LnkRemove            -> "LNK_REMOVE"
+  | LnkComdat            -> "LNK_COMDAT"
+  | GpRel                -> "GPREL"
+  | MemPurgeable         -> "MEM_PURGEABLE"
+  | MemLocked            -> "MEM_LOCKED"
+  | MemPreload           -> "MEM_PRELOAD"
+  | other                -> flag_to_string_mem other
 
 let flag_to_string = function
   | TypeNoPad            -> "TYPE_NO_PAD"
@@ -183,34 +225,7 @@ let flag_to_string = function
   | CntUninitializedData -> "CNT_UNINITIALIZED_DATA"
   | LnkOther             -> "LNK_OTHER"
   | LnkInfo              -> "LNK_INFO"
-  | LnkRemove            -> "LNK_REMOVE"
-  | LnkComdat            -> "LNK_COMDAT"
-  | GpRel                -> "GPREL"
-  | MemPurgeable         -> "MEM_PURGEABLE"
-  | MemLocked            -> "MEM_LOCKED"
-  | MemPreload           -> "MEM_PRELOAD"
-  | Align1Bytes          -> "ALIGN_1BYTES"
-  | Align2Bytes          -> "ALIGN_2BYTES"
-  | Align4Bytes          -> "ALIGN_4BYTES"
-  | Align8Bytes          -> "ALIGN_8BYTES"
-  | Align16Bytes         -> "ALIGN_16BYTES"
-  | Align32Bytes         -> "ALIGN_32BYTES"
-  | Align64Bytes         -> "ALIGN_64BYTES"
-  | Align128Bytes        -> "ALIGN_128BYTES"
-  | Align256Bytes        -> "ALIGN_256BYTES"
-  | Align512Bytes        -> "ALIGN_512BYTES"
-  | Align1024Bytes       -> "ALIGN_1024BYTES"
-  | Align2048Bytes       -> "ALIGN_2048BYTES"
-  | Align4096Bytes       -> "ALIGN_4096BYTES"
-  | Align8192Bytes       -> "ALIGN_8192BYTES"
-  | LnkNrelocOvfl       -> "LNK_NRELOC_OVFL"
-  | MemDiscardable       -> "MEM_DISCARDABLE"
-  | MemNotCached         -> "MEM_NOT_CACHED"
-  | MemNotPaged          -> "MEM_NOT_PAGED"
-  | MemShared            -> "MEM_SHARED"
-  | MemExecute           -> "MEM_EXECUTE"
-  | MemRead              -> "MEM_READ"
-  | MemWrite             -> "MEM_WRITE"
+  | other                -> flag_to_string_cnt other
 
 (** [pp fmt flags] pretty-prints the flag list [flags] to formatter [fmt]
     as a pipe-separated list of flag names. *)

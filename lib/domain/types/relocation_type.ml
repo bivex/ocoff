@@ -204,242 +204,179 @@ type t =
   | Ia64 of ia64_rel
   | Generic of int
 
-let amd64_of_uint16 = function
-  | 0x0000 -> Amd64_Absolute
-  | 0x0001 -> Amd64_Addr64
-  | 0x0002 -> Amd64_Addr32
-  | 0x0003 -> Amd64_Addr32nb
-  | 0x0004 -> Amd64_Rel32
-  | 0x0005 -> Amd64_Rel32_1
-  | 0x0006 -> Amd64_Rel32_2
-  | 0x0007 -> Amd64_Rel32_3
-  | 0x0008 -> Amd64_Rel32_4
-  | 0x0009 -> Amd64_Rel32_5
-  | 0x000A -> Amd64_Section
-  | 0x000B -> Amd64_Secrel
-  | 0x000C -> Amd64_Secrel7
-  | 0x000D -> Amd64_Token
-  | 0x000E -> Amd64_Srel32
-  | 0x000F -> Amd64_Pair
-  | 0x0010 -> Amd64_Sspan32
-  | n -> Amd64_Unknown n
+let amd64_table = [
+  (0x0000, Amd64_Absolute, "AMD64_ABSOLUTE");
+  (0x0001, Amd64_Addr64, "AMD64_ADDR64");
+  (0x0002, Amd64_Addr32, "AMD64_ADDR32");
+  (0x0003, Amd64_Addr32nb, "AMD64_ADDR32NB");
+  (0x0004, Amd64_Rel32, "AMD64_REL32");
+  (0x0005, Amd64_Rel32_1, "AMD64_REL32_1");
+  (0x0006, Amd64_Rel32_2, "AMD64_REL32_2");
+  (0x0007, Amd64_Rel32_3, "AMD64_REL32_3");
+  (0x0008, Amd64_Rel32_4, "AMD64_REL32_4");
+  (0x0009, Amd64_Rel32_5, "AMD64_REL32_5");
+  (0x000A, Amd64_Section, "AMD64_SECTION");
+  (0x000B, Amd64_Secrel, "AMD64_SECREL");
+  (0x000C, Amd64_Secrel7, "AMD64_SECREL7");
+  (0x000D, Amd64_Token, "AMD64_TOKEN");
+  (0x000E, Amd64_Srel32, "AMD64_SREL32");
+  (0x000F, Amd64_Pair, "AMD64_PAIR");
+  (0x0010, Amd64_Sspan32, "AMD64_SSPAN32");
+]
+
+let i386_table = [
+  (0x0000, I386_Absolute, "I386_ABSOLUTE");
+  (0x0001, I386_Dir16, "I386_DIR16");
+  (0x0002, I386_Rel16, "I386_REL16");
+  (0x0006, I386_Dir32, "I386_DIR32");
+  (0x0007, I386_Dir32nb, "I386_DIR32NB");
+  (0x0009, I386_Seg12, "I386_SEG12");
+  (0x000A, I386_Section, "I386_SECTION");
+  (0x000B, I386_Secrel, "I386_SECREL");
+  (0x000C, I386_Token, "I386_TOKEN");
+  (0x000D, I386_Secrel7, "I386_SECREL7");
+  (0x0014, I386_Rel32, "I386_REL32");
+]
+
+let arm64_table = [
+  (0x0000, Arm64_Absolute, "ARM64_ABSOLUTE");
+  (0x0001, Arm64_Addr32, "ARM64_ADDR32");
+  (0x0002, Arm64_Addr32nb, "ARM64_ADDR32NB");
+  (0x0003, Arm64_Branch26, "ARM64_BRANCH26");
+  (0x0004, Arm64_Pagebase_Rel21, "ARM64_PAGEBASE_REL21");
+  (0x0005, Arm64_Rel21, "ARM64_REL21");
+  (0x0006, Arm64_Pageoffset_12a, "ARM64_PAGEOFFSET_12A");
+  (0x0007, Arm64_Pageoffset_12l, "ARM64_PAGEOFFSET_12L");
+  (0x0008, Arm64_Secrel, "ARM64_SECREL");
+  (0x0009, Arm64_Secrel_Low12a, "ARM64_SECREL_LOW12A");
+  (0x000A, Arm64_Secrel_High12a, "ARM64_SECREL_HIGH12A");
+  (0x000B, Arm64_Secrel_Low12l, "ARM64_SECREL_LOW12L");
+  (0x000C, Arm64_Token, "ARM64_TOKEN");
+  (0x000D, Arm64_Section, "ARM64_SECTION");
+  (0x000E, Arm64_Addr64, "ARM64_ADDR64");
+  (0x000F, Arm64_Branch19, "ARM64_BRANCH19");
+  (0x0010, Arm64_Branch14, "ARM64_BRANCH14");
+  (0x0011, Arm64_Rel32, "ARM64_REL32");
+]
+
+let arm_table = [
+  (0x0000, Arm_Absolute, "ARM_ABSOLUTE");
+  (0x0001, Arm_Addr32, "ARM_ADDR32");
+  (0x0002, Arm_Addr32nb, "ARM_ADDR32NB");
+  (0x0003, Arm_Branch24, "ARM_BRANCH24");
+  (0x0004, Arm_Branch11, "ARM_BRANCH11");
+  (0x000A, Arm_Rel32, "ARM_REL32");
+  (0x000E, Arm_Section, "ARM_SECTION");
+  (0x000F, Arm_Secrel, "ARM_SECREL");
+  (0x0010, Arm_Mov32, "ARM_MOV32");
+  (0x0011, Arm_Thumb_Mov32, "ARM_THUMB_MOV32");
+  (0x0012, Arm_Thumb_Branch20, "ARM_THUMB_BRANCH20");
+  (0x0014, Arm_Thumb_Branch24, "ARM_THUMB_BRANCH24");
+  (0x0015, Arm_Thumb_Blx23, "ARM_THUMB_BLX23");
+  (0x0016, Arm_Pair, "ARM_PAIR");
+]
+
+let lookup_code code table =
+  List.find_map (fun (c, r, _) -> if c = code then Some r else None) table
+
+let lookup_rel rel table =
+  List.find_map (fun (c, r, _) -> if r = rel then Some c else None) table
+
+let lookup_name rel table =
+  List.find_map (fun (_, r, s) -> if r = rel then Some s else None) table
+
+let amd64_of_uint16 n =
+  match lookup_code n amd64_table with
+  | Some r -> r
+  | None -> Amd64_Unknown n
 
 let amd64_to_uint16 = function
-  | Amd64_Absolute -> 0x0000
-  | Amd64_Addr64 -> 0x0001
-  | Amd64_Addr32 -> 0x0002
-  | Amd64_Addr32nb -> 0x0003
-  | Amd64_Rel32 -> 0x0004
-  | Amd64_Rel32_1 -> 0x0005
-  | Amd64_Rel32_2 -> 0x0006
-  | Amd64_Rel32_3 -> 0x0007
-  | Amd64_Rel32_4 -> 0x0008
-  | Amd64_Rel32_5 -> 0x0009
-  | Amd64_Section -> 0x000A
-  | Amd64_Secrel -> 0x000B
-  | Amd64_Secrel7 -> 0x000C
-  | Amd64_Token -> 0x000D
-  | Amd64_Srel32 -> 0x000E
-  | Amd64_Pair -> 0x000F
-  | Amd64_Sspan32 -> 0x0010
   | Amd64_Unknown n -> n
+  | r -> Option.value (lookup_rel r amd64_table) ~default:0
 
-let i386_of_uint16 = function
-  | 0x0000 -> I386_Absolute
-  | 0x0001 -> I386_Dir16
-  | 0x0002 -> I386_Rel16
-  | 0x0006 -> I386_Dir32
-  | 0x0007 -> I386_Dir32nb
-  | 0x0009 -> I386_Seg12
-  | 0x000A -> I386_Section
-  | 0x000B -> I386_Secrel
-  | 0x000C -> I386_Token
-  | 0x000D -> I386_Secrel7
-  | 0x0014 -> I386_Rel32
-  | n -> I386_Unknown n
+let amd64_to_string = function
+  | Amd64_Unknown n -> Printf.sprintf "AMD64_UNKNOWN(0x%04x)" n
+  | r -> Option.value (lookup_name r amd64_table) ~default:"AMD64_UNKNOWN"
+
+let i386_of_uint16 n =
+  match lookup_code n i386_table with
+  | Some r -> r
+  | None -> I386_Unknown n
 
 let i386_to_uint16 = function
-  | I386_Absolute -> 0x0000
-  | I386_Dir16 -> 0x0001
-  | I386_Rel16 -> 0x0002
-  | I386_Dir32 -> 0x0006
-  | I386_Dir32nb -> 0x0007
-  | I386_Seg12 -> 0x0009
-  | I386_Section -> 0x000A
-  | I386_Secrel -> 0x000B
-  | I386_Token -> 0x000C
-  | I386_Secrel7 -> 0x000D
-  | I386_Rel32 -> 0x0014
   | I386_Unknown n -> n
+  | r -> Option.value (lookup_rel r i386_table) ~default:0
 
-let arm64_of_uint16 = function
-  | 0x0000 -> Arm64_Absolute
-  | 0x0001 -> Arm64_Addr32
-  | 0x0002 -> Arm64_Addr32nb
-  | 0x0003 -> Arm64_Branch26
-  | 0x0004 -> Arm64_Pagebase_Rel21
-  | 0x0005 -> Arm64_Rel21
-  | 0x0006 -> Arm64_Pageoffset_12a
-  | 0x0007 -> Arm64_Pageoffset_12l
-  | 0x0008 -> Arm64_Secrel
-  | 0x0009 -> Arm64_Secrel_Low12a
-  | 0x000A -> Arm64_Secrel_High12a
-  | 0x000B -> Arm64_Secrel_Low12l
-  | 0x000C -> Arm64_Token
-  | 0x000D -> Arm64_Section
-  | 0x000E -> Arm64_Addr64
-  | 0x000F -> Arm64_Branch19
-  | 0x0010 -> Arm64_Branch14
-  | 0x0011 -> Arm64_Rel32
-  | n -> Arm64_Unknown n
+let i386_to_string = function
+  | I386_Unknown n -> Printf.sprintf "I386_UNKNOWN(0x%04x)" n
+  | r -> Option.value (lookup_name r i386_table) ~default:"I386_UNKNOWN"
+
+let arm64_of_uint16 n =
+  match lookup_code n arm64_table with
+  | Some r -> r
+  | None -> Arm64_Unknown n
 
 let arm64_to_uint16 = function
-  | Arm64_Absolute -> 0x0000
-  | Arm64_Addr32 -> 0x0001
-  | Arm64_Addr32nb -> 0x0002
-  | Arm64_Branch26 -> 0x0003
-  | Arm64_Pagebase_Rel21 -> 0x0004
-  | Arm64_Rel21 -> 0x0005
-  | Arm64_Pageoffset_12a -> 0x0006
-  | Arm64_Pageoffset_12l -> 0x0007
-  | Arm64_Secrel -> 0x0008
-  | Arm64_Secrel_Low12a -> 0x0009
-  | Arm64_Secrel_High12a -> 0x000A
-  | Arm64_Secrel_Low12l -> 0x000B
-  | Arm64_Token -> 0x000C
-  | Arm64_Section -> 0x000D
-  | Arm64_Addr64 -> 0x000E
-  | Arm64_Branch19 -> 0x000F
-  | Arm64_Branch14 -> 0x0010
-  | Arm64_Rel32 -> 0x0011
   | Arm64_Unknown n -> n
+  | r -> Option.value (lookup_rel r arm64_table) ~default:0
 
-let arm_of_uint16 = function
-  | 0x0000 -> Arm_Absolute
-  | 0x0001 -> Arm_Addr32
-  | 0x0002 -> Arm_Addr32nb
-  | 0x0003 -> Arm_Branch24
-  | 0x0004 -> Arm_Branch11
-  | 0x000A -> Arm_Rel32
-  | 0x000E -> Arm_Section
-  | 0x000F -> Arm_Secrel
-  | 0x0010 -> Arm_Mov32
-  | 0x0011 -> Arm_Thumb_Mov32
-  | 0x0012 -> Arm_Thumb_Branch20
-  | 0x0014 -> Arm_Thumb_Branch24
-  | 0x0015 -> Arm_Thumb_Blx23
-  | 0x0016 -> Arm_Pair
-  | n -> Arm_Unknown n
+let arm64_to_string = function
+  | Arm64_Unknown n -> Printf.sprintf "ARM64_UNKNOWN(0x%04x)" n
+  | r -> Option.value (lookup_name r arm64_table) ~default:"ARM64_UNKNOWN"
+
+let arm_of_uint16 n =
+  match lookup_code n arm_table with
+  | Some r -> r
+  | None -> Arm_Unknown n
 
 let arm_to_uint16 = function
-  | Arm_Absolute -> 0x0000
-  | Arm_Addr32 -> 0x0001
-  | Arm_Addr32nb -> 0x0002
-  | Arm_Branch24 -> 0x0003
-  | Arm_Branch11 -> 0x0004
-  | Arm_Rel32 -> 0x000A
-  | Arm_Section -> 0x000E
-  | Arm_Secrel -> 0x000F
-  | Arm_Mov32 -> 0x0010
-  | Arm_Thumb_Mov32 -> 0x0011
-  | Arm_Thumb_Branch20 -> 0x0012
-  | Arm_Thumb_Branch24 -> 0x0014
-  | Arm_Thumb_Blx23 -> 0x0015
-  | Arm_Pair -> 0x0016
   | Arm_Unknown n -> n
+  | r -> Option.value (lookup_rel r arm_table) ~default:0
 
-let of_uint16 ~(machine : Machine_type.t) n =
+let arm_to_string = function
+  | Arm_Unknown n -> Printf.sprintf "ARM_UNKNOWN(0x%04x)" n
+  | r -> Option.value (lookup_name r arm_table) ~default:"ARM_UNKNOWN"
+
+let of_uint16_arm machine n =
   match machine with
-  | Machine_type.Amd64 -> Amd64 (amd64_of_uint16 n)
-  | Machine_type.I386 -> I386 (i386_of_uint16 n)
   | Machine_type.Arm64 | Machine_type.Arm64ec | Machine_type.Arm64x ->
     Arm64 (arm64_of_uint16 n)
   | Machine_type.Arm | Machine_type.Armnt | Machine_type.Thumb ->
     Arm (arm_of_uint16 n)
   | _ -> Generic n
 
+let of_uint16 ~(machine : Machine_type.t) n =
+  match machine with
+  | Machine_type.Amd64 -> Amd64 (amd64_of_uint16 n)
+  | Machine_type.I386 -> I386 (i386_of_uint16 n)
+  | other -> of_uint16_arm other n
+
+let to_uint16_other = function
+  | Ppc _ | Mips _ | Sh _ | M32r _ | Ia64 _ -> 0
+  | Generic n -> n
+  | _ -> 0
+
 let to_uint16 = function
   | Amd64 r -> amd64_to_uint16 r
   | I386 r -> i386_to_uint16 r
   | Arm64 r -> arm64_to_uint16 r
   | Arm r -> arm_to_uint16 r
-  | Ppc _ -> 0
-  | Mips _ -> 0
-  | Sh _ -> 0
-  | M32r _ -> 0
-  | Ia64 _ -> 0
-  | Generic n -> n
+  | other -> to_uint16_other other
 
-let to_string = function
-  | Amd64 Amd64_Absolute -> "AMD64_ABSOLUTE"
-  | Amd64 Amd64_Addr64 -> "AMD64_ADDR64"
-  | Amd64 Amd64_Addr32 -> "AMD64_ADDR32"
-  | Amd64 Amd64_Addr32nb -> "AMD64_ADDR32NB"
-  | Amd64 Amd64_Rel32 -> "AMD64_REL32"
-  | Amd64 Amd64_Rel32_1 -> "AMD64_REL32_1"
-  | Amd64 Amd64_Rel32_2 -> "AMD64_REL32_2"
-  | Amd64 Amd64_Rel32_3 -> "AMD64_REL32_3"
-  | Amd64 Amd64_Rel32_4 -> "AMD64_REL32_4"
-  | Amd64 Amd64_Rel32_5 -> "AMD64_REL32_5"
-  | Amd64 Amd64_Section -> "AMD64_SECTION"
-  | Amd64 Amd64_Secrel -> "AMD64_SECREL"
-  | Amd64 Amd64_Secrel7 -> "AMD64_SECREL7"
-  | Amd64 Amd64_Token -> "AMD64_TOKEN"
-  | Amd64 Amd64_Srel32 -> "AMD64_SREL32"
-  | Amd64 Amd64_Pair -> "AMD64_PAIR"
-  | Amd64 Amd64_Sspan32 -> "AMD64_SSPAN32"
-  | Amd64 (Amd64_Unknown n) -> Printf.sprintf "AMD64_UNKNOWN(0x%04x)" n
-  | I386 I386_Absolute -> "I386_ABSOLUTE"
-  | I386 I386_Dir16 -> "I386_DIR16"
-  | I386 I386_Rel16 -> "I386_REL16"
-  | I386 I386_Dir32 -> "I386_DIR32"
-  | I386 I386_Dir32nb -> "I386_DIR32NB"
-  | I386 I386_Seg12 -> "I386_SEG12"
-  | I386 I386_Section -> "I386_SECTION"
-  | I386 I386_Secrel -> "I386_SECREL"
-  | I386 I386_Token -> "I386_TOKEN"
-  | I386 I386_Secrel7 -> "I386_SECREL7"
-  | I386 I386_Rel32 -> "I386_REL32"
-  | I386 (I386_Unknown n) -> Printf.sprintf "I386_UNKNOWN(0x%04x)" n
-  | Arm64 Arm64_Absolute -> "ARM64_ABSOLUTE"
-  | Arm64 Arm64_Addr32 -> "ARM64_ADDR32"
-  | Arm64 Arm64_Addr32nb -> "ARM64_ADDR32NB"
-  | Arm64 Arm64_Branch26 -> "ARM64_BRANCH26"
-  | Arm64 Arm64_Pagebase_Rel21 -> "ARM64_PAGEBASE_REL21"
-  | Arm64 Arm64_Rel21 -> "ARM64_REL21"
-  | Arm64 Arm64_Pageoffset_12a -> "ARM64_PAGEOFFSET_12A"
-  | Arm64 Arm64_Pageoffset_12l -> "ARM64_PAGEOFFSET_12L"
-  | Arm64 Arm64_Secrel -> "ARM64_SECREL"
-  | Arm64 Arm64_Secrel_Low12a -> "ARM64_SECREL_LOW12A"
-  | Arm64 Arm64_Secrel_High12a -> "ARM64_SECREL_HIGH12A"
-  | Arm64 Arm64_Secrel_Low12l -> "ARM64_SECREL_LOW12L"
-  | Arm64 Arm64_Token -> "ARM64_TOKEN"
-  | Arm64 Arm64_Section -> "ARM64_SECTION"
-  | Arm64 Arm64_Addr64 -> "ARM64_ADDR64"
-  | Arm64 Arm64_Branch19 -> "ARM64_BRANCH19"
-  | Arm64 Arm64_Branch14 -> "ARM64_BRANCH14"
-  | Arm64 Arm64_Rel32 -> "ARM64_REL32"
-  | Arm64 (Arm64_Unknown n) -> Printf.sprintf "ARM64_UNKNOWN(0x%04x)" n
-  | Arm Arm_Absolute -> "ARM_ABSOLUTE"
-  | Arm Arm_Addr32 -> "ARM_ADDR32"
-  | Arm Arm_Addr32nb -> "ARM_ADDR32NB"
-  | Arm Arm_Branch24 -> "ARM_BRANCH24"
-  | Arm Arm_Branch11 -> "ARM_BRANCH11"
-  | Arm Arm_Rel32 -> "ARM_REL32"
-  | Arm Arm_Section -> "ARM_SECTION"
-  | Arm Arm_Secrel -> "ARM_SECREL"
-  | Arm Arm_Mov32 -> "ARM_MOV32"
-  | Arm Arm_Thumb_Mov32 -> "ARM_THUMB_MOV32"
-  | Arm Arm_Thumb_Branch20 -> "ARM_THUMB_BRANCH20"
-  | Arm Arm_Thumb_Branch24 -> "ARM_THUMB_BRANCH24"
-  | Arm Arm_Thumb_Blx23 -> "ARM_THUMB_BLX23"
-  | Arm Arm_Pair -> "ARM_PAIR"
-  | Arm (Arm_Unknown n) -> Printf.sprintf "ARM_UNKNOWN(0x%04x)" n
+let to_string_other = function
   | Ppc _ -> "PPC_RELOC"
   | Mips _ -> "MIPS_RELOC"
   | Sh _ -> "SH_RELOC"
   | M32r _ -> "M32R_RELOC"
   | Ia64 _ -> "IA64_RELOC"
   | Generic n -> Printf.sprintf "RELOC(0x%04x)" n
+  | _ -> "UNKNOWN_RELOC"
+
+let to_string = function
+  | Amd64 r -> amd64_to_string r
+  | I386 r -> i386_to_string r
+  | Arm64 r -> arm64_to_string r
+  | Arm r -> arm_to_string r
+  | other -> to_string_other other
 
 let pp fmt t = Format.pp_print_string fmt (to_string t)
