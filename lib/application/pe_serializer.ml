@@ -134,29 +134,12 @@ let serialize_symbol w (sym : Coff_symbol.t) =
   Binary_writer.write_u8 w (List.length sym.aux_records);
   List.iter (serialize_aux_record w) sym.aux_records
 
-let serialize_pe_file (pf : Pe_file.t) : (bytes, Error.t) result =
-  let w = Binary_writer.create () in
-  (match pf.dos_stub with
-   | Some stub ->
-     Binary_writer.write_bytes w (Dos_stub.raw stub);
-     let pe_off = Dos_stub.pe_offset stub in
-     let cur = Binary_writer.pos w in
-     if cur < pe_off then Binary_writer.write_zero_pad w (pe_off - cur)
-   | None -> ());
-  Binary_writer.write_string w "PE\x00\x00";
-  serialize_coff_header w pf.coff_header;
-  (match pf.optional_header with
-   | Some oh -> serialize_optional_header w oh
-   | None -> ());
-  List.iter (serialize_section_header w) pf.sections;
-
-  (* Symbol Table *)
+let serialize_symbol_and_string_tables w (pf : Pe_file.t) =
   let sym_off = Int32.to_int pf.coff_header.pointer_to_symbol_table in
   if sym_off > 0 then begin
     let cur = Binary_writer.pos w in
     if cur < sym_off then Binary_writer.write_zero_pad w (sym_off - cur);
     List.iter (serialize_symbol w) pf.symbol_table;
-    (* String Table *)
     let strtab_len = String.length pf.string_table in
     if strtab_len > 0 then begin
       Binary_writer.write_u32_le w (Int32.of_int (strtab_len + 4));
@@ -164,58 +147,49 @@ let serialize_pe_file (pf : Pe_file.t) : (bytes, Error.t) result =
     end else if pf.coff_header.number_of_symbols > 0l then begin
       Binary_writer.write_u32_le w 4l
     end
-  end;
+  end
 
-  (* Section Data *)
-  List.iter (fun (sec : Section_header.t) ->
-    let raw_off = Int32.to_int sec.pointer_to_raw_data in
-    let raw_sz = Int32.to_int sec.size_of_raw_data in
-    if raw_off > 0 && raw_sz > 0 then begin
-      let cur = Binary_writer.pos w in
-      if cur < raw_off then Binary_writer.write_zero_pad w (raw_off - cur);
-      let data = Pe_file.section_data pf sec in
-      if Bytes.length data > 0 then Binary_writer.write_bytes w data
-      else Binary_writer.write_zero_pad w raw_sz
-    end
-  ) pf.sections;
+let serialize_single_section_data w pf (sec : Section_header.t) =
+  let raw_off = Int32.to_int sec.pointer_to_raw_data in
+  let raw_sz = Int32.to_int sec.size_of_raw_data in
+  if raw_off > 0 && raw_sz > 0 then begin
+    let cur = Binary_writer.pos w in
+    if cur < raw_off then Binary_writer.write_zero_pad w (raw_off - cur);
+    let data = Pe_file.section_data pf sec in
+    if Bytes.length data > 0 then Binary_writer.write_bytes w data
+    else Binary_writer.write_zero_pad w raw_sz
+  end
 
+let serialize_sections_data w (pf : Pe_file.t) =
+  List.iter (serialize_single_section_data w pf) pf.sections
+
+let serialize_dos_stub w = function
+  | Some stub ->
+    Binary_writer.write_bytes w (Dos_stub.raw stub);
+    let pe_off = Dos_stub.pe_offset stub in
+    let cur = Binary_writer.pos w in
+    if cur < pe_off then Binary_writer.write_zero_pad w (pe_off - cur)
+  | None -> ()
+
+let serialize_pe_headers w (pf : Pe_file.t) =
+  serialize_dos_stub w pf.dos_stub;
+  Binary_writer.write_string w "PE\x00\x00";
+  serialize_coff_header w pf.coff_header;
+  Option.iter (serialize_optional_header w) pf.optional_header;
+  List.iter (serialize_section_header w) pf.sections
+
+let serialize_pe_file (pf : Pe_file.t) : (bytes, Error.t) result =
+  let w = Binary_writer.create () in
+  serialize_pe_headers w pf;
+  serialize_symbol_and_string_tables w pf;
+  serialize_sections_data w pf;
   Ok (Binary_writer.to_bytes w)
 
 let serialize_coff_object (pf : Pe_file.t) : (bytes, Error.t) result =
   let w = Binary_writer.create () in
   serialize_coff_header w pf.coff_header;
-  (match pf.optional_header with
-   | Some oh -> serialize_optional_header w oh
-   | None -> ());
+  Option.iter (serialize_optional_header w) pf.optional_header;
   List.iter (serialize_section_header w) pf.sections;
-
-  (* Symbol Table *)
-  let sym_off = Int32.to_int pf.coff_header.pointer_to_symbol_table in
-  if sym_off > 0 then begin
-    let cur = Binary_writer.pos w in
-    if cur < sym_off then Binary_writer.write_zero_pad w (sym_off - cur);
-    List.iter (serialize_symbol w) pf.symbol_table;
-    (* String Table *)
-    let strtab_len = String.length pf.string_table in
-    if strtab_len > 0 then begin
-      Binary_writer.write_u32_le w (Int32.of_int (strtab_len + 4));
-      Binary_writer.write_string w pf.string_table
-    end else if pf.coff_header.number_of_symbols > 0l then begin
-      Binary_writer.write_u32_le w 4l
-    end
-  end;
-
-  (* Section Data *)
-  List.iter (fun (sec : Section_header.t) ->
-    let raw_off = Int32.to_int sec.pointer_to_raw_data in
-    let raw_sz = Int32.to_int sec.size_of_raw_data in
-    if raw_off > 0 && raw_sz > 0 then begin
-      let cur = Binary_writer.pos w in
-      if cur < raw_off then Binary_writer.write_zero_pad w (raw_off - cur);
-      let data = Pe_file.section_data pf sec in
-      if Bytes.length data > 0 then Binary_writer.write_bytes w data
-      else Binary_writer.write_zero_pad w raw_sz
-    end
-  ) pf.sections;
-
+  serialize_symbol_and_string_tables w pf;
+  serialize_sections_data w pf;
   Ok (Binary_writer.to_bytes w)
