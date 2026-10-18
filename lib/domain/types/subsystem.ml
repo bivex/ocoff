@@ -26,15 +26,7 @@ type t =
 
     Returns [Error (`Unknown_subsystem n)] for values not recognised by
     this implementation. *)
-let of_uint16 = function
-  | 0  -> Ok Unknown
-  | 1  -> Ok Native
-  | 2  -> Ok WindowsGui
-  | 3  -> Ok WindowsCui
-  | 5  -> Ok Os2Cui
-  | 7  -> Ok PosixCui
-  | 8  -> Ok NativeWindows
-  | 9  -> Ok WindowsCeGui
+let of_uint16_efi = function
   | 10 -> Ok EfiApplication
   | 11 -> Ok EfiBootServiceDriver
   | 12 -> Ok EfiRuntimeDriver
@@ -44,7 +36,27 @@ let of_uint16 = function
   | 17 -> Ok XboxCodeCatalog
   | n  -> Error (`Unknown_subsystem n)
 
-(** [to_uint16 t] encodes subsystem [t] as its 16-bit wire value. *)
+let of_uint16 = function
+  | 0  -> Ok Unknown
+  | 1  -> Ok Native
+  | 2  -> Ok WindowsGui
+  | 3  -> Ok WindowsCui
+  | 5  -> Ok Os2Cui
+  | 7  -> Ok PosixCui
+  | 8  -> Ok NativeWindows
+  | 9  -> Ok WindowsCeGui
+  | n  -> of_uint16_efi n
+
+let to_uint16_efi = function
+  | EfiApplication         -> 10
+  | EfiBootServiceDriver   -> 11
+  | EfiRuntimeDriver       -> 12
+  | EfiRom                 -> 13
+  | Xbox                   -> 14
+  | WindowsBootApplication -> 16
+  | XboxCodeCatalog        -> 17
+  | _                      -> 0
+
 let to_uint16 = function
   | Unknown                -> 0
   | Native                 -> 1
@@ -54,15 +66,18 @@ let to_uint16 = function
   | PosixCui               -> 7
   | NativeWindows          -> 8
   | WindowsCeGui           -> 9
-  | EfiApplication         -> 10
-  | EfiBootServiceDriver   -> 11
-  | EfiRuntimeDriver       -> 12
-  | EfiRom                 -> 13
-  | Xbox                   -> 14
-  | WindowsBootApplication -> 16
-  | XboxCodeCatalog        -> 17
+  | other                  -> to_uint16_efi other
 
-(** [to_string t] returns a human-readable label for subsystem [t]. *)
+let to_string_efi = function
+  | EfiApplication         -> "EFI Application"
+  | EfiBootServiceDriver   -> "EFI Boot Service Driver"
+  | EfiRuntimeDriver       -> "EFI Runtime Driver"
+  | EfiRom                 -> "EFI ROM"
+  | Xbox                   -> "Xbox"
+  | WindowsBootApplication -> "Windows Boot Application"
+  | XboxCodeCatalog        -> "Xbox Code Catalog"
+  | _                      -> "Unknown"
+
 let to_string = function
   | Unknown                -> "Unknown"
   | Native                 -> "Native"
@@ -72,13 +87,7 @@ let to_string = function
   | PosixCui               -> "POSIX CUI"
   | NativeWindows          -> "Native Windows"
   | WindowsCeGui           -> "Windows CE GUI"
-  | EfiApplication         -> "EFI Application"
-  | EfiBootServiceDriver   -> "EFI Boot Service Driver"
-  | EfiRuntimeDriver       -> "EFI Runtime Driver"
-  | EfiRom                 -> "EFI ROM"
-  | Xbox                   -> "Xbox"
-  | WindowsBootApplication -> "Windows Boot Application"
-  | XboxCodeCatalog        -> "Xbox Code Catalog"
+  | other                  -> to_string_efi other
 
 (** [pp fmt t] pretty-prints subsystem [t] to formatter [fmt]. *)
 let pp fmt t = Format.pp_print_string fmt (to_string t)

@@ -23,16 +23,7 @@ type kind =
   | ClrRuntimeHeader      (** Index 14: CLR (.NET) runtime header *)
   | Reserved              (** Index 15 and any unrecognised index *)
 
-(** Map a 0-based data-directory index to its [kind]. *)
-let kind_of_index = function
-  | 0  -> ExportTable
-  | 1  -> ImportTable
-  | 2  -> ResourceTable
-  | 3  -> ExceptionTable
-  | 4  -> CertificateTable
-  | 5  -> BaseRelocationTable
-  | 6  -> Debug
-  | 7  -> Architecture
+let kind_of_index_hi = function
   | 8  -> GlobalPtr
   | 9  -> TlsTable
   | 10 -> LoadConfigTable
@@ -42,7 +33,28 @@ let kind_of_index = function
   | 14 -> ClrRuntimeHeader
   | _  -> Reserved
 
-(** Human-readable name for a [kind]. *)
+let kind_of_index = function
+  | 0  -> ExportTable
+  | 1  -> ImportTable
+  | 2  -> ResourceTable
+  | 3  -> ExceptionTable
+  | 4  -> CertificateTable
+  | 5  -> BaseRelocationTable
+  | 6  -> Debug
+  | 7  -> Architecture
+  | n  -> kind_of_index_hi n
+
+let kind_to_string_hi = function
+  | GlobalPtr             -> "Global Ptr"
+  | TlsTable              -> "TLS Table"
+  | LoadConfigTable       -> "Load Config Table"
+  | BoundImport           -> "Bound Import"
+  | Iat                   -> "IAT"
+  | DelayImportDescriptor -> "Delay Import Descriptor"
+  | ClrRuntimeHeader      -> "CLR Runtime Header"
+  | Reserved              -> "Reserved"
+  | _                     -> "Unknown"
+
 let kind_to_string = function
   | ExportTable           -> "Export Table"
   | ImportTable           -> "Import Table"
@@ -52,14 +64,29 @@ let kind_to_string = function
   | BaseRelocationTable   -> "Base Relocation Table"
   | Debug                 -> "Debug"
   | Architecture          -> "Architecture"
-  | GlobalPtr             -> "Global Ptr"
-  | TlsTable              -> "TLS Table"
-  | LoadConfigTable       -> "Load Config Table"
-  | BoundImport           -> "Bound Import"
-  | Iat                   -> "IAT"
-  | DelayImportDescriptor -> "Delay Import Descriptor"
-  | ClrRuntimeHeader      -> "CLR Runtime Header"
-  | Reserved              -> "Reserved"
+  | other                 -> kind_to_string_hi other
+
+let index_of_kind_hi = function
+  | GlobalPtr             -> 8
+  | TlsTable              -> 9
+  | LoadConfigTable       -> 10
+  | BoundImport           -> 11
+  | Iat                   -> 12
+  | DelayImportDescriptor -> 13
+  | ClrRuntimeHeader      -> 14
+  | Reserved              -> 15
+  | _                     -> 15
+
+let index_of_kind = function
+  | ExportTable           -> 0
+  | ImportTable           -> 1
+  | ResourceTable         -> 2
+  | ExceptionTable        -> 3
+  | CertificateTable      -> 4
+  | BaseRelocationTable   -> 5
+  | Debug                 -> 6
+  | Architecture          -> 7
+  | other                 -> index_of_kind_hi other
 
 (** A single IMAGE_DATA_DIRECTORY record. *)
 type t = {

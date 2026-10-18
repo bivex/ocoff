@@ -14,6 +14,13 @@ type flag =
   | GuardCf            (** 0x4000 – Control Flow Guard enabled *)
   | TerminalServerAware(** 0x8000 – terminal-server aware *)
 
+let flag_to_string_ext = function
+  | AppContainer        -> "APPCONTAINER"
+  | WdmDriver           -> "WDM_DRIVER"
+  | GuardCf             -> "GUARD_CF"
+  | TerminalServerAware -> "TERMINAL_SERVER_AWARE"
+  | _                   -> "UNKNOWN"
+
 let flag_to_string = function
   | HighEntropyVa       -> "HIGH_ENTROPY_VA"
   | DynamicBase         -> "DYNAMIC_BASE"
@@ -22,10 +29,7 @@ let flag_to_string = function
   | NoIsolation         -> "NO_ISOLATION"
   | NoSeh               -> "NO_SEH"
   | NoBind              -> "NO_BIND"
-  | AppContainer        -> "APPCONTAINER"
-  | WdmDriver           -> "WDM_DRIVER"
-  | GuardCf             -> "GUARD_CF"
-  | TerminalServerAware -> "TERMINAL_SERVER_AWARE"
+  | other               -> flag_to_string_ext other
 
 let flag_bits : (flag * int) list = [
   (HighEntropyVa,       0x0020);

@@ -26,6 +26,12 @@ type t =
       (** A NUL-terminated string starting at [offset] had no NUL byte
           before the end of the buffer. *)
 
+let hex_bytes b =
+  Bytes.to_seq b
+  |> Seq.map (fun c -> Printf.sprintf "%02x" (Char.code c))
+  |> List.of_seq
+  |> String.concat " "
+
 (** [pp fmt e] pretty-prints error [e] to formatter [fmt]. *)
 let pp fmt = function
   | Unexpected_eof { offset; needed; available } ->
@@ -33,12 +39,6 @@ let pp fmt = function
         "Unexpected EOF at offset 0x%x: needed %d byte(s), only %d available"
         offset needed available
   | Invalid_signature { offset; expected; got } ->
-      let hex_bytes b =
-        Bytes.to_seq b
-        |> Seq.map (fun c -> Printf.sprintf "%02x" (Char.code c))
-        |> List.of_seq
-        |> String.concat " "
-      in
       Format.fprintf fmt
         "Invalid signature at offset 0x%x: expected [%s], got [%s]"
         offset (hex_bytes expected) (hex_bytes got)

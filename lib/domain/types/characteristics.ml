@@ -18,22 +18,26 @@ type flag =
   | UpSystemOnly          (** 0x4000 – run only on uniprocessor system *)
   | BytesReversedHi       (** 0x8000 – big-endian word (deprecated) *)
 
+let flag_to_string_high = function
+  | DebugStripped        -> "DEBUG_STRIPPED"
+  | RemovableRunFromSwap -> "REMOVABLE_RUN_FROM_SWAP"
+  | NetRunFromSwap       -> "NET_RUN_FROM_SWAP"
+  | System               -> "SYSTEM"
+  | Dll                  -> "DLL"
+  | UpSystemOnly         -> "UP_SYSTEM_ONLY"
+  | BytesReversedHi      -> "BYTES_REVERSED_HI"
+  | _                    -> "UNKNOWN"
+
 let flag_to_string = function
-  | RelocsStripped        -> "RELOCS_STRIPPED"
-  | ExecutableImage       -> "EXECUTABLE_IMAGE"
-  | LineNumsStripped      -> "LINE_NUMS_STRIPPED"
-  | LocalSymsStripped     -> "LOCAL_SYMS_STRIPPED"
-  | AggressiveWsTrim      -> "AGGRESSIVE_WS_TRIM"
-  | LargeAddressAware     -> "LARGE_ADDRESS_AWARE"
-  | BytesReversedLo       -> "BYTES_REVERSED_LO"
-  | Machine32bit          -> "32BIT_MACHINE"
-  | DebugStripped         -> "DEBUG_STRIPPED"
-  | RemovableRunFromSwap  -> "REMOVABLE_RUN_FROM_SWAP"
-  | NetRunFromSwap        -> "NET_RUN_FROM_SWAP"
-  | System                -> "SYSTEM"
-  | Dll                   -> "DLL"
-  | UpSystemOnly          -> "UP_SYSTEM_ONLY"
-  | BytesReversedHi       -> "BYTES_REVERSED_HI"
+  | RelocsStripped       -> "RELOCS_STRIPPED"
+  | ExecutableImage      -> "EXECUTABLE_IMAGE"
+  | LineNumsStripped     -> "LINE_NUMS_STRIPPED"
+  | LocalSymsStripped    -> "LOCAL_SYMS_STRIPPED"
+  | AggressiveWsTrim     -> "AGGRESSIVE_WS_TRIM"
+  | LargeAddressAware    -> "LARGE_ADDRESS_AWARE"
+  | BytesReversedLo      -> "BYTES_REVERSED_LO"
+  | Machine32bit         -> "32BIT_MACHINE"
+  | other                -> flag_to_string_high other
 
 let flag_bits : (flag * int) list = [
   (RelocsStripped,       0x0001);

@@ -133,24 +133,7 @@ let is_64bit t = match t.format with Pe32plus -> true | Pe32 -> false
 (** Look up a data directory entry by kind.  Returns [None] when the
     directory array does not contain an entry for the requested index. *)
 let data_directory t kind =
-  let idx = match kind with
-    | Data_directory.ExportTable           -> 0
-    | Data_directory.ImportTable           -> 1
-    | Data_directory.ResourceTable         -> 2
-    | Data_directory.ExceptionTable        -> 3
-    | Data_directory.CertificateTable      -> 4
-    | Data_directory.BaseRelocationTable   -> 5
-    | Data_directory.Debug                 -> 6
-    | Data_directory.Architecture          -> 7
-    | Data_directory.GlobalPtr             -> 8
-    | Data_directory.TlsTable              -> 9
-    | Data_directory.LoadConfigTable       -> 10
-    | Data_directory.BoundImport           -> 11
-    | Data_directory.Iat                   -> 12
-    | Data_directory.DelayImportDescriptor -> 13
-    | Data_directory.ClrRuntimeHeader      -> 14
-    | Data_directory.Reserved              -> 15
-  in
+  let idx = Data_directory.index_of_kind kind in
   if idx < Array.length t.data_directories then
     Some t.data_directories.(idx)
   else
